@@ -88,10 +88,14 @@ int
 atoi(const char *s)
 {
   int n;
-
+  int neg=(*s=='-');
+  if(neg)s++;
   n = 0;
   while('0' <= *s && *s <= '9')
     n = n*10 + *s++ - '0';
+  if(neg==1){
+    n=-n;
+  }
   return n;
 }
 
