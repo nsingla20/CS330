@@ -31,5 +31,6 @@ main(int argc, char *argv[]){
     }else{
         printf("ERROR: n can take {0,1} only\n");
     }
+    wait(0);
     exit(0);
 }
