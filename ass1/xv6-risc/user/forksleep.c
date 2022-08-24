@@ -5,10 +5,14 @@
 int
 main(int argc, char *argv[]){
     if(argc!=3){
-        printf("Invalid arguments!\nFormat:\nforksleep [int] [int]\n");
+        printf("Invalid arguments!\nFormat:\nforksleep [+int] [int]\n");
         exit(0);
     }
     int m=atoi(argv[1]),n=atoi(argv[2]);
+    if(m==0||n<0||n>1){
+        printf("Invalid arguments!\nFormat:\nforksleep [+int] [int]\n");
+        exit(0);
+    }
     int x=fork();
     if(n==0){
         if(x==0){
@@ -28,8 +32,6 @@ main(int argc, char *argv[]){
         }else{
             printf("fork error\n");
         }
-    }else{
-        printf("ERROR: n can take {0,1} only\n");
     }
     wait(0);
     exit(0);
