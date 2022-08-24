@@ -5,10 +5,14 @@ int primes[]={2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,8
 
 int main(int argc, char *argv[]){
     if(argc!=2){
-        printf("Usage: primefactors <n>\n");
+        printf("Usage: primefactors <int[2,100]>\n");
         exit(0);
     }
     int n=atoi(argv[1]);
+    if(n<2||n>100){
+        printf("Usage: primefactors <int[2,100]>\n");
+        exit(0);
+    }
     int i=0;
     int pip[2];
     while(n!=1){
