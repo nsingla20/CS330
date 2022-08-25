@@ -4,12 +4,12 @@
 
 int main(int argc, char *argv[]){
     if(argc!=3){
-        printf("Usage: primefactors <n[+int]> <x[+int]>\n");
+        printf("Usage: primefactors <n[+int]> <x[int]>\n");
         exit(0);
     }
     int n=atoi(argv[1]),x=atoi(argv[2]);
     if(n<1){
-        printf("Usage: primefactors <n[+int]> <x[+int]>\n");
+        printf("Usage: primefactors <n[+int]> <x[int]>\n");
         exit(0);
     }
     while(n){
