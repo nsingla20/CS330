@@ -136,6 +136,8 @@ UPROGS=\
 	$U/_forksleep\
 	$U/_pipeline\
 	$U/_primefactors\
+	$U/_test_getppid\
+	$U/_test_yield\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

@@ -14,3 +14,8 @@ kernelmemfs
 */kernel/kernel
 */user/usys.S
 
+*.tex *.dvi *.idx *.aux *.log *.ind *.ilg
+*/*.o */*.d */*.asm */*.sym
+user/initcode user/initcode.out kernel/kernel fs.img 
+mkfs/mkfs .gdbinit
+user/usys.S

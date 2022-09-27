@@ -7,6 +7,19 @@
 #include "spinlock.h"
 #include "proc.h"
 
+
+uint64
+sys_getppid(void){
+  return getppid();
+}
+
+uint64
+sys_yield(void){
+  yield();
+  return 0;
+}
+
+
 uint64
 sys_exit(void)
 {
@@ -95,3 +108,4 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
