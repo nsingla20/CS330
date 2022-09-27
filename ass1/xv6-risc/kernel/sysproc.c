@@ -19,6 +19,12 @@ sys_yield(void){
   return 0;
 }
 
+uint64
+sys_getpa(void){
+  uint64 A;
+  argaddr(0,&A);
+  return walkaddr(myproc()->pagetable,A)+(A&(PGSIZE-1));
+}
 
 uint64
 sys_exit(void)

@@ -23,3 +23,4 @@
 
 #define SYS_getppid 22
 #define SYS_yield 23
+#define SYS_getpa 24
