@@ -814,7 +814,7 @@ ps(void){
     }else{
       printf("%d",(p->etime)-(p->stime));
     }
-    printf(",\t size=0x%x\n",p->sz);
+    printf(",\t size=%p\n",p->sz);
     release(&p->lock);
     release(&wait_lock);
   }
