@@ -141,6 +141,7 @@ UPROGS=\
 	$U/_test_getpa\
 	$U/_test_forkf\
 	$U/_test_waitpid\
+	$U/_test_ps\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

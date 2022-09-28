@@ -107,6 +107,7 @@ void            procdump(void);
 int             getppid(void);
 int             forkf(uint64);
 int             waitpid(int,uint64);
+void            ps(void);
 
 // swtch.S
 void            swtch(struct context*, struct context*);

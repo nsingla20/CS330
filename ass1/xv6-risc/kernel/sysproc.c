@@ -49,6 +49,12 @@ sys_waitpid(void){
 }
 
 uint64
+sys_ps(void){
+  ps();
+  return 0;
+}
+
+uint64
 sys_exit(void)
 {
   int n;

@@ -119,7 +119,11 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-
+  p->etime=-1;
+  p->stime=-1;
+  acquire(&tickslock);
+  p->ctime=ticks;
+  release(&tickslock);
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -164,6 +168,9 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->ctime=-1;
+  p->etime=-1;
+  p->stime=-1;
 }
 
 // Create a user page table for a given process,
@@ -372,6 +379,10 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&wait_lock);
+  
+  acquire(&tickslock);
+  p->etime=ticks-p->stime;
+  release(&tickslock);
 
   // Jump into the scheduler, never to return.
   sched();
@@ -509,9 +520,14 @@ forkret(void)
 {
   static int first = 1;
 
+  //Set start time
+  acquire(&tickslock);
+  myproc()->stime=ticks;
+  release(&tickslock);
+
   // Still holding p->lock from scheduler.
   release(&myproc()->lock);
-
+  
   if (first) {
     // File system initialization must be run in the context of a
     // regular process (e.g., because it calls sleep), and thus cannot
@@ -765,5 +781,40 @@ waitpid(int pid,uint64 addr){
     }
     release(&np->lock);
     sleep(p,&wait_lock);
+  }
+}
+
+void
+ps(void){
+  static char *states[] = {
+  [UNUSED]    "unused",
+  [SLEEPING]  "sleep ",
+  [RUNNABLE]  "runble",
+  [RUNNING]   "run   ",
+  [ZOMBIE]    "zombie"
+  };
+  struct proc *p;
+  char *state;
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state == UNUSED)
+      continue;
+    if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
+      state = states[p->state];
+    else
+      state = "???";
+    acquire(&wait_lock);
+    acquire(&p->lock);
+    // printf("%s",state);
+    printf("pid=%d,\t ppid=%d,\t state=%s,\t cmd=%s,\t ctime=%d,\t stime=%d,\t etime=", p->pid,p->parent?p->parent->pid:-1,state,p->name,p->ctime,p->stime);
+    if((p->etime)<0){
+      acquire(&tickslock);
+      printf("%d",ticks-p->stime);
+      release(&tickslock);
+    }else{
+      printf("%d",(p->etime)-(p->stime));
+    }
+    printf(",\t size=0x%x\n",p->sz);
+    release(&p->lock);
+    release(&wait_lock);
   }
 }
