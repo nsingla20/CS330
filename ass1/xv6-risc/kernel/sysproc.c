@@ -27,6 +27,15 @@ sys_getpa(void){
 }
 
 uint64
+sys_forkf(void){
+  uint64 f;
+  if(argaddr(0,&f)<0){
+    return -1;
+  }
+  return forkf(f);
+}
+
+uint64
 sys_exit(void)
 {
   int n;
