@@ -717,3 +717,53 @@ forkf(uint64 f)
 
   return pid;
 }
+
+int
+waitpid(int pid,uint64 addr){
+  struct proc *np;
+  int havekid;
+  struct proc *p = myproc();
+
+  acquire(&wait_lock);
+    // Scan through table looking for exited children.
+  havekid = 0;
+  for(np = proc; np < &proc[NPROC]; np++){
+    if(np->parent == p){
+      // make sure the child isn't still in exit() or swtch().
+      acquire(&np->lock);
+      if(np->pid == pid){
+        havekid=1;
+        release(&np->lock);
+        break;
+      }
+      release(&np->lock);
+    }
+  }
+  // No point waiting if we don't have any children.
+  if(!havekid){
+    release(&wait_lock);
+    return -1;
+  }
+
+  for(;;){
+    if(p->killed){
+      release(&wait_lock);
+      return -1;
+    }
+    acquire(&np->lock);
+    if(np->state == ZOMBIE){
+      if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
+                              sizeof(np->xstate)) < 0) {
+        release(&np->lock);
+        release(&wait_lock);
+        return -1;
+      }
+      freeproc(np);
+      release(&np->lock);
+      release(&wait_lock);
+      return pid;
+    }
+    release(&np->lock);
+    sleep(p,&wait_lock);
+  }
+}

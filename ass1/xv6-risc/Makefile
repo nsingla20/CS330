@@ -140,6 +140,7 @@ UPROGS=\
 	$U/_test_yield\
 	$U/_test_getpa\
 	$U/_test_forkf\
+	$U/_test_waitpid\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
