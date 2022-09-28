@@ -55,6 +55,19 @@ sys_ps(void){
 }
 
 uint64
+sys_pinfo(void){
+  int pid;
+  uint64 p;
+  if(argint(0,&pid)<0||argaddr(1,&p)<0){
+    return -1;
+  }
+  if(pid<0){
+    return pinfo(myproc()->pid,p);
+  }
+  return pinfo(pid,p);
+}
+
+uint64
 sys_exit(void)
 {
   int n;

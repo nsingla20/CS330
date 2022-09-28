@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "procstat.h"
 
 struct cpu cpus[NCPU];
 
@@ -379,7 +380,7 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&wait_lock);
-  
+
   acquire(&tickslock);
   p->etime=ticks-p->stime;
   release(&tickslock);
@@ -817,4 +818,50 @@ ps(void){
     release(&p->lock);
     release(&wait_lock);
   }
+}
+
+int
+pinfo(int pid,uint64 pt){
+  static char *states[] = {
+  [UNUSED]    "unused",
+  [SLEEPING]  "sleep ",
+  [RUNNABLE]  "runble",
+  [RUNNING]   "run   ",
+  [ZOMBIE]    "zombie"
+  };
+  struct proc *p;
+  int found=0;
+  struct procstat st;
+
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->pid == pid){
+      found=1;
+      break;
+    }
+  }
+  if(!found){
+    return -1;
+  }
+  acquire(&p->lock);
+  for(int i=0;i<16;i++){
+    st.command[i]=p->name[i];
+  }
+  st.pid=pid;
+  for(int i=0;i<8;i++){
+    st.state[i]=states[p->state][i];
+  }
+  st.ctime=p->ctime;
+  acquire(&tickslock);
+  st.etime=p->etime<0?ticks-p->stime:p->etime;
+  release(&tickslock);
+  acquire(&wait_lock);
+  st.ppid=p->parent?p->parent->pid:-1;
+  release(&wait_lock);
+  st.size=p->sz;
+  st.stime=p->stime;
+  release(&p->lock);
+
+  copyout(p->pagetable,pt,(char*)&st,sizeof(st));
+
+  return 0;
 }

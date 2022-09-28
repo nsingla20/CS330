@@ -108,6 +108,7 @@ int             getppid(void);
 int             forkf(uint64);
 int             waitpid(int,uint64);
 void            ps(void);
+int             pinfo(int,uint64);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
