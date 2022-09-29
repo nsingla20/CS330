@@ -19,3 +19,4 @@ kernelmemfs
 user/initcode user/initcode.out kernel/kernel fs.img 
 mkfs/mkfs .gdbinit
 user/usys.S
+**/submission

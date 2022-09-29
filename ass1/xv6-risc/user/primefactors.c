@@ -2,13 +2,26 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 int primes[]={2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97};
-
+int
+toint(const char *s)
+{
+  int n;
+  int neg=(*s=='-');
+  if(neg)s++;
+  n = 0;
+  while('0' <= *s && *s <= '9')
+    n = n*10 + *s++ - '0';
+  if(neg==1){
+    n=-n;
+  }
+  return n;
+}
 int main(int argc, char *argv[]){
     if(argc!=2){
         printf("Usage: primefactors <int[2,100]>\n");
         exit(0);
     }
-    int n=atoi(argv[1]);
+    int n=toint(argv[1]);
     if(n<2||n>100){
         printf("Usage: primefactors <int[2,100]>\n");
         exit(0);

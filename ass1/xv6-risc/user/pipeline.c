@@ -2,12 +2,26 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 
+int
+toint(const char *s)
+{
+  int n;
+  int neg=(*s=='-');
+  if(neg)s++;
+  n = 0;
+  while('0' <= *s && *s <= '9')
+    n = n*10 + *s++ - '0';
+  if(neg==1){
+    n=-n;
+  }
+  return n;
+}
 int main(int argc, char *argv[]){
     if(argc!=3){
         printf("Usage: primefactors <n[+int]> <x[int]>\n");
         exit(0);
     }
-    int n=atoi(argv[1]),x=atoi(argv[2]);
+    int n=toint(argv[1]),x=toint(argv[2]);
     if(n<1){
         printf("Usage: primefactors <n[+int]> <x[int]>\n");
         exit(0);

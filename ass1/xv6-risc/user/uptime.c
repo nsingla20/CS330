@@ -4,6 +4,7 @@
 
 int
 main(int argc, char *argv[]){
-    printf("%ds\n",uptime()/10);
+    int t=uptime();
+    printf("%d hours %d minutes %d seconds\n",t/36000,(t/600)%60,(t/10)%60);
     exit(0);
 }
