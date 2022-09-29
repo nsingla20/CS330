@@ -861,7 +861,7 @@ pinfo(int pid,uint64 pt){
   st.stime=p->stime;
   release(&p->lock);
 
-  copyout(p->pagetable,pt,(char*)&st,sizeof(st));
+  copyout(myproc()->pagetable,pt,(char*)&st,sizeof(st));
 
   return 0;
 }
