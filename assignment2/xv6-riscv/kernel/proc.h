@@ -106,7 +106,12 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  int ctime;		       // Creation time
-  int stime;		       // Execution start time
-  int endtime;		       // Execution end time
+  int ctime;		                // Creation time
+  int stime;		                // Execution start time
+  int endtime;		              // Execution end time
+
+  int is_forkp;
+  uint s;
+
+  int bp;                       // Base priority
 };

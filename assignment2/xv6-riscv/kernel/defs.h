@@ -108,6 +108,9 @@ int		forkf(uint64);
 int		waitpid(int, uint64);
 int		ps(void);
 int		pinfo(int, uint64);
+int     schedpolicy(int);
+int     get_cur_sched_policy(void);
+int     forkp(int);
 
 // swtch.S
 void            swtch(struct context*, struct context*);

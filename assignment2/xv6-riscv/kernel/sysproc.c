@@ -8,6 +8,22 @@
 #include "proc.h"
 
 uint64
+sys_schedpolicy(void)
+{
+  int p;
+  if(argint(0, &p) < 0)
+    return -1;
+  return schedpolicy(p);
+}
+uint64
+sys_forkp(void)
+{
+  uint64 x;
+  if (argaddr(0, &x) < 0) return -1;
+  return forkp(x);
+}
+
+uint64
 sys_exit(void)
 {
   int n;

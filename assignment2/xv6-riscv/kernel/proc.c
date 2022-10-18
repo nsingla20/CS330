@@ -7,6 +7,8 @@
 #include "defs.h"
 #include "procstat.h"
 
+int cur_sched_policy;
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -48,7 +50,7 @@ void
 procinit(void)
 {
   struct proc *p;
-  
+  cur_sched_policy=SCHED_PREEMPT_RR;
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
@@ -150,6 +152,9 @@ found:
   p->ctime = xticks;
   p->stime = -1;
   p->endtime = -1;
+  p->is_forkp=0;
+  p->s=0;
+  p->bp = 0;
 
   return p;
 }
@@ -379,6 +384,59 @@ forkf(uint64 faddr)
   return pid;
 }
 
+// Create a new process, copying the parent.
+// Sets up child kernel stack to return as if from fork() system call.
+int
+forkp(int bp)
+{
+  int i, pid;
+  struct proc *np;
+  struct proc *p = myproc();
+
+  // Allocate process.
+  if((np = allocproc()) == 0){
+    return -1;
+  }
+
+  // Copy user memory from parent to child.
+  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
+  np->sz = p->sz;
+  np->is_forkp=1;
+  np->bp=bp;
+
+  // copy saved user registers.
+  *(np->trapframe) = *(p->trapframe);
+
+  // Cause fork to return 0 in the child.
+  np->trapframe->a0 = 0;
+
+  // increment reference counts on open file descriptors.
+  for(i = 0; i < NOFILE; i++)
+    if(p->ofile[i])
+      np->ofile[i] = filedup(p->ofile[i]);
+  np->cwd = idup(p->cwd);
+
+  safestrcpy(np->name, p->name, sizeof(p->name));
+
+  pid = np->pid;
+
+  release(&np->lock);
+
+  acquire(&wait_lock);
+  np->parent = p;
+  release(&wait_lock);
+
+  acquire(&np->lock);
+  np->state = RUNNABLE;
+  release(&np->lock);
+
+  return pid;
+}
+
 // Pass p's abandoned children to init.
 // Caller must hold wait_lock.
 void
@@ -540,16 +598,74 @@ waitpid(int pid, uint64 addr)
   }
 }
 
-// Per-CPU process scheduler.
-// Each CPU calls scheduler() after setting itself up.
-// Scheduler never returns.  It loops, doing:
-//  - choose a process to run.
-//  - swtch to start running that process.
-//  - eventually that process transfers control
-//    via swtch back to the scheduler.
-void
-scheduler(void)
-{
+//run a process
+void run_proc(struct proc *p,struct cpu *c){
+
+  uint xticks;
+  if (!holding(&tickslock)) {
+    acquire(&tickslock);
+    xticks = ticks;
+    release(&tickslock);
+  }
+  else xticks = ticks;
+
+  // Switch to chosen process.  It is the process's job
+  // to release its lock and then reacquire it
+  // before jumping back to us.
+  p->state = RUNNING;
+  uint st=xticks;
+  c->proc = p;
+  swtch(&c->context, &p->context);
+
+  // Process is done running for now.
+  // It should have changed its p->state before coming back.
+  c->proc = 0;
+
+  if(!p->is_forkp){
+    return;
+  }
+
+  if (!holding(&tickslock)) {
+    acquire(&tickslock);
+    xticks = ticks;
+    release(&tickslock);
+  }
+  else xticks = ticks;
+
+  uint end=xticks;
+
+  uint brust=end-st;
+
+  p->s=brust-(SCHED_PARAM_SJF_A_NUMER*brust)/SCHED_PARAM_SJF_A_DENOM+(SCHED_PARAM_SJF_A_NUMER*(p->s))/SCHED_PARAM_SJF_A_DENOM;
+
+}
+
+void sched_SJF(){
+  struct proc *p,*p_to_run;
+  struct cpu *c = mycpu();
+  c->proc=0;
+  
+  intr_on();
+
+  for(p=proc,p_to_run=proc;p<&proc[NPROC];p++){
+    acquire(&p->lock);
+    if(p->state == RUNNABLE){
+      if(!p->is_forkp){
+        p_to_run=p;
+        release(&p->lock);
+        break;
+      }
+      if(p->s<p_to_run->s){
+        p_to_run=p;
+      }
+    }
+    release(&p->lock);
+  }
+  acquire(&p_to_run->lock);
+  run_proc(p_to_run,c);
+}
+
+void sched_FCFS_RR(){
   struct proc *p;
   struct cpu *c = mycpu();
   
@@ -561,18 +677,40 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+        
+        run_proc(p,c);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+        if(cur_sched_policy!=SCHED_PREEMPT_RR&&cur_sched_policy!=SCHED_NPREEMPT_FCFS){
+          release(&p->lock);
+          scheduler();
+        }
       }
       release(&p->lock);
+    }
+  }
+}
+
+// Per-CPU process scheduler.
+// Each CPU calls scheduler() after setting itself up.
+// Scheduler never returns.  It loops, doing:
+//  - choose a process to run.
+//  - swtch to start running that process.
+//  - eventually that process transfers control
+//    via swtch back to the scheduler.
+void
+scheduler(void)
+{
+  for(;;){
+    if(cur_sched_policy==SCHED_NPREEMPT_FCFS){
+      sched_FCFS_RR();
+    }else if(cur_sched_policy==SCHED_NPREEMPT_SJF){
+      sched_SJF();
+    }else if(cur_sched_policy==SCHED_PREEMPT_RR){
+      sched_FCFS_RR();
+    }else if(cur_sched_policy==SCHED_PREEMPT_UNIX){
+
+    }else{
+      panic("No such sched policy");
     }
   }
 }
@@ -891,4 +1029,12 @@ pinfo(int pid, uint64 addr)
      return 0;
   }
   else return -1;
+}
+int schedpolicy(int p){
+  int x=cur_sched_policy;
+  cur_sched_policy=p;
+  return x;
+}
+int get_cur_sched_policy(){
+  return cur_sched_policy;
 }

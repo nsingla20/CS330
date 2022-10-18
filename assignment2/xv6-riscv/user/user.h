@@ -33,6 +33,9 @@ int waitpid(int, int*);
 int ps(void);
 int pinfo(int, struct procstat*);
 
+int schedpolicy(int);
+int forkp(int);
+
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);

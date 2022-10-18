@@ -29,6 +29,16 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+// Check if timer inertupt is allowed
+int timer_int(void)
+{
+  int x= get_cur_sched_policy();
+  if(x==SCHED_NPREEMPT_FCFS||x==SCHED_NPREEMPT_SJF){
+    return 0;
+  }
+  return 1;
+}
+
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -77,7 +87,7 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2&&timer_int())
     yield();
 
   usertrapret();
@@ -150,7 +160,7 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
+  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING && timer_int())
     yield();
 
   // the yield() may have caused some traps to occur,
