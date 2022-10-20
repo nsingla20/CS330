@@ -155,6 +155,7 @@ found:
   p->is_forkp=0;
   p->s=0;
   p->bp = 0;
+  p->cpu_us=0;
 
   return p;
 }
@@ -640,6 +641,26 @@ void run_proc(struct proc *p,struct cpu *c){
 
 }
 
+void sched_UNIX(){
+  struct proc *p,*p_to_run;
+  struct cpu *c = mycpu();
+  c->proc=0;
+  
+  intr_on();
+  for(p=proc,p_to_run=proc;p<&proc[NPROC];p++){
+    acquire(&p->lock);
+    p->cpu_us=p->cpu_us/2;
+    int x=p->bp+p->cpu_us/2;
+    int y=p_to_run->bp+p_to_run->cpu_us/2;
+    if(x<y){
+      p_to_run=p;
+    }
+    release(&p->lock);
+  }
+  acquire(&p_to_run->lock);
+  run_proc(p_to_run,c);
+}
+
 void sched_SJF(){
   struct proc *p,*p_to_run;
   struct cpu *c = mycpu();
@@ -708,7 +729,7 @@ scheduler(void)
     }else if(cur_sched_policy==SCHED_PREEMPT_RR){
       sched_FCFS_RR();
     }else if(cur_sched_policy==SCHED_PREEMPT_UNIX){
-
+      sched_UNIX();
     }else{
       panic("No such sched policy");
     }
@@ -749,6 +770,7 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  p->cpu_us+=SCHED_PARAM_CPU_USAGE;
   sched();
   release(&p->lock);
 }
@@ -800,6 +822,7 @@ sleep(void *chan, struct spinlock *lk)
 
   // Go to sleep.
   p->chan = chan;
+  p->cpu_us+=SCHED_PARAM_CPU_USAGE/2;
   p->state = SLEEPING;
 
   sched();

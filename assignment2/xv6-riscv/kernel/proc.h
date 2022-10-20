@@ -114,4 +114,5 @@ struct proc {
   uint s;
 
   int bp;                       // Base priority
+  int cpu_us;                   // CPU Usage
 };
