@@ -715,12 +715,31 @@ void sched_UNIX(){
   
   intr_on();
   for(p=proc,p_to_run=proc;p<&proc[NPROC];p++){
-    acquire(&p->lock);
-    p->cpu_us=p->cpu_us/2;
-    int x=p->bp+p->cpu_us/2;
-    int y=p_to_run->bp+p_to_run->cpu_us/2;
-    if(x<y){
+    if(p->state==RUNNABLE){
       p_to_run=p;
+      break;
+    }
+  }
+  for(p=proc;p<&proc[NPROC];p++){
+    acquire(&p->lock);
+    if(p->state==RUNNABLE){
+      p->cpu_us/=2;
+    }
+    release(&p->lock);
+  }
+  for(p=proc;p<&proc[NPROC];p++){
+    acquire(&p->lock);
+    if(p->state==RUNNABLE){
+      if(!p->is_forkp){
+        run_proc(p,c);
+        release(&p->lock);
+        return;
+      }
+      int x=p->bp+p->cpu_us/2;
+      int y=p_to_run->bp+p_to_run->cpu_us/2;
+      if(x<y){
+        p_to_run=p;
+      }
     }
     release(&p->lock);
   }
