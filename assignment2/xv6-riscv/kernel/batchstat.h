@@ -1,0 +1,20 @@
+struct batchstat {
+    int n;
+    int st_time;
+    int end_time;
+    int avg_wt;
+    int avg_tr;
+    int avg_comp;
+    int min_comp;
+    int max_comp;
+    int n_CPU_brst;
+    int avg_CPU_brst;
+    int min_CPU_brst;
+    int max_CPU_brst;
+    int n_CPU_brst_est;
+    int avg_CPU_brst_est;
+    int min_CPU_brst_est;
+    int max_CPU_brst_est;
+    int n_CPU_brst_err;
+    int avg_CPU_brst_err;
+};

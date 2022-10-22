@@ -112,7 +112,10 @@ struct proc {
 
   int is_forkp;
   uint s;
+  uint t;
 
   int bp;                       // Base priority
   int cpu_us;                   // CPU Usage
+
+  uint en_runab;                //time while entering RUNNABLE
 };

@@ -24,6 +24,7 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+void print_batch(void);
 
 int getppid(void);
 int yield(void);

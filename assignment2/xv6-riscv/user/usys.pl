@@ -47,3 +47,4 @@ entry("pinfo");
 
 entry("schedpolicy");
 entry("forkp");
+entry("print_batch");

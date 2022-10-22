@@ -30,3 +30,4 @@
 #define SYS_pinfo   28
 #define SYS_schedpolicy 29
 #define SYS_forkp 30
+#define SYS_print_batch 31

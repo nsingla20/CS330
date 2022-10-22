@@ -6,8 +6,11 @@
 #include "proc.h"
 #include "defs.h"
 #include "procstat.h"
+#include "batchstat.h"
 
 int cur_sched_policy;
+
+struct batchstat batchst;
 
 struct cpu cpus[NCPU];
 
@@ -51,6 +54,23 @@ procinit(void)
 {
   struct proc *p;
   cur_sched_policy=SCHED_PREEMPT_RR;
+  batchst.st_time=__INT32_MAX__;
+  batchst.end_time=0;
+  batchst.avg_wt=0;
+  batchst.avg_tr=0;
+  batchst.avg_comp=0;
+  batchst.min_comp=__INT32_MAX__;
+  batchst.max_comp=0;
+  batchst.n_CPU_brst=0;
+  batchst.avg_CPU_brst=0;
+  batchst.min_CPU_brst=__INT32_MAX__;
+  batchst.max_CPU_brst=0;
+  batchst.n_CPU_brst_est=0;
+  batchst.avg_CPU_brst_est=0;
+  batchst.min_CPU_brst_est=__INT32_MAX__;
+  batchst.max_CPU_brst_est=0;
+  batchst.n_CPU_brst_err=0;
+  batchst.avg_CPU_brst_err=0;
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
@@ -154,6 +174,7 @@ found:
   p->endtime = -1;
   p->is_forkp=0;
   p->s=0;
+  p->t=0;
   p->bp = 0;
   p->cpu_us=0;
 
@@ -259,6 +280,14 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  uint xticks;
+  if (!holding(&tickslock)) {
+    acquire(&tickslock);
+    xticks = ticks;
+    release(&tickslock);
+  }
+  else xticks = ticks;
+  p->en_runab=xticks;
 
   release(&p->lock);
 }
@@ -407,6 +436,7 @@ forkp(int bp)
   }
   np->sz = p->sz;
   np->is_forkp=1;
+  batchst.n++;
   np->bp=bp;
 
   // copy saved user registers.
@@ -433,6 +463,14 @@ forkp(int bp)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  uint xticks;
+  if (!holding(&tickslock)) {
+    acquire(&tickslock);
+    xticks = ticks;
+    release(&tickslock);
+  }
+  else xticks = ticks;
+  p->en_runab=xticks;
   release(&np->lock);
 
   return pid;
@@ -497,8 +535,16 @@ exit(int status)
   acquire(&tickslock);
   xticks = ticks;
   release(&tickslock);
-
+  p->t=xticks;
   p->endtime = xticks;
+
+  if(p->is_forkp){
+    batchst.end_time=max(batchst.end_time,xticks);
+    batchst.avg_tr+=(p->endtime-p->ctime);
+    batchst.avg_comp+=xticks;
+    batchst.min_comp=min(batchst.min_comp,xticks);
+    batchst.max_comp=max(batchst.max_comp,xticks);
+  }
 
   // Jump into the scheduler, never to return.
   sched();
@@ -601,7 +647,7 @@ waitpid(int pid, uint64 addr)
 
 //run a process
 void run_proc(struct proc *p,struct cpu *c){
-
+  // printf("Running:%d\n",p->pid);
   uint xticks;
   if (!holding(&tickslock)) {
     acquire(&tickslock);
@@ -610,10 +656,15 @@ void run_proc(struct proc *p,struct cpu *c){
   }
   else xticks = ticks;
 
+  if(p->is_forkp){
+    batchst.st_time=min(batchst.st_time,xticks);
+  }
+
   // Switch to chosen process.  It is the process's job
   // to release its lock and then reacquire it
   // before jumping back to us.
   p->state = RUNNING;
+  batchst.avg_wt+=(xticks-p->en_runab);
   uint st=xticks;
   c->proc = p;
   swtch(&c->context, &p->context);
@@ -633,12 +684,28 @@ void run_proc(struct proc *p,struct cpu *c){
   }
   else xticks = ticks;
 
-  uint end=xticks;
+  uint end=p->t;
 
   uint brust=end-st;
+  if(p->s>0){
+    batchst.n_CPU_brst_est++;
+    batchst.avg_CPU_brst_est+=p->s;
+    batchst.max_CPU_brst_est=max(batchst.max_CPU_brst_est,p->s);
+    batchst.min_CPU_brst_est=min(batchst.min_CPU_brst_est,p->s);
+  }
+  if(brust>0){
+    batchst.n_CPU_brst++;
+    batchst.avg_CPU_brst+=brust;
+    batchst.max_CPU_brst=max(batchst.max_CPU_brst,brust);
+    batchst.min_CPU_brst=min(batchst.min_CPU_brst,brust);
+  }
+  if(p->s>0&&brust>0){
+    batchst.n_CPU_brst_err++;
+    batchst.avg_CPU_brst_err+=(brust>p->s?brust-p->s:p->s-brust);
+  }
 
   p->s=brust-(SCHED_PARAM_SJF_A_NUMER*brust)/SCHED_PARAM_SJF_A_DENOM+(SCHED_PARAM_SJF_A_NUMER*(p->s))/SCHED_PARAM_SJF_A_DENOM;
-
+  
 }
 
 void sched_UNIX(){
@@ -659,6 +726,7 @@ void sched_UNIX(){
   }
   acquire(&p_to_run->lock);
   run_proc(p_to_run,c);
+  release(&p_to_run->lock);
 }
 
 void sched_SJF(){
@@ -667,14 +735,19 @@ void sched_SJF(){
   c->proc=0;
   
   intr_on();
-
   for(p=proc,p_to_run=proc;p<&proc[NPROC];p++){
+    if(p->state==RUNNABLE){
+      p_to_run=p;
+      break;
+    }
+  }
+  for(p=proc;p<&proc[NPROC];p++){
     acquire(&p->lock);
     if(p->state == RUNNABLE){
       if(!p->is_forkp){
-        p_to_run=p;
+        run_proc(p,c);
         release(&p->lock);
-        break;
+        return;
       }
       if(p->s<p_to_run->s){
         p_to_run=p;
@@ -684,6 +757,7 @@ void sched_SJF(){
   }
   acquire(&p_to_run->lock);
   run_proc(p_to_run,c);
+  release(&p_to_run->lock);
 }
 
 void sched_FCFS_RR(){
@@ -703,7 +777,7 @@ void sched_FCFS_RR(){
 
         if(cur_sched_policy!=SCHED_PREEMPT_RR&&cur_sched_policy!=SCHED_NPREEMPT_FCFS){
           release(&p->lock);
-          scheduler();
+          return;
         }
       }
       release(&p->lock);
@@ -770,7 +844,16 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  uint xticks;
+  if (!holding(&tickslock)) {
+    acquire(&tickslock);
+    xticks = ticks;
+    release(&tickslock);
+  }
+  else xticks = ticks;
+  p->en_runab=xticks;
   p->cpu_us+=SCHED_PARAM_CPU_USAGE;
+  p->t=xticks;
   sched();
   release(&p->lock);
 }
@@ -825,6 +908,15 @@ sleep(void *chan, struct spinlock *lk)
   p->cpu_us+=SCHED_PARAM_CPU_USAGE/2;
   p->state = SLEEPING;
 
+  uint xticks;
+  if (!holding(&tickslock)) {
+    acquire(&tickslock);
+    xticks = ticks;
+    release(&tickslock);
+  }
+  else xticks = ticks;
+  p->t=xticks;
+
   sched();
 
   // Tidy up.
@@ -847,6 +939,14 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        uint xticks;
+        if (!holding(&tickslock)) {
+          acquire(&tickslock);
+          xticks = ticks;
+          release(&tickslock);
+        }
+        else xticks = ticks;
+        p->en_runab=xticks;
       }
       release(&p->lock);
     }
@@ -868,6 +968,14 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
+        uint xticks;
+        if (!holding(&tickslock)) {
+          acquire(&tickslock);
+          xticks = ticks;
+          release(&tickslock);
+        }
+        else xticks = ticks;
+        p->en_runab=xticks;
       }
       release(&p->lock);
       return 0;
@@ -1060,4 +1168,46 @@ int schedpolicy(int p){
 }
 int get_cur_sched_policy(){
   return cur_sched_policy;
+}
+void print_batch(){
+  struct proc *p;
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->is_forkp){
+      waitpid(p->pid,0);
+    }
+  }
+
+  batchst.avg_tr/=batchst.n;
+  batchst.avg_wt/=batchst.n;
+  batchst.avg_comp/=batchst.n;
+  batchst.avg_CPU_brst/=batchst.n_CPU_brst;
+  batchst.avg_CPU_brst_err/=batchst.n_CPU_brst_err;
+  batchst.avg_CPU_brst_est/=batchst.n_CPU_brst_est;
+  printf("\n");
+  printf("Batch execution time: %d\n",batchst.end_time-batchst.st_time);
+   printf("Average turn-around time: %d\n",batchst.avg_tr);
+   printf("Average waiting time: %d\n",batchst.avg_wt);
+   printf("Completion time: avg: %d, max: %d, min: %d\n",batchst.avg_comp,batchst.max_comp,batchst.min_comp);
+   if(cur_sched_policy==SCHED_NPREEMPT_SJF){
+      printf("CPU bursts: count: %d, avg: %d, max: %d, min: %d\n",batchst.n_CPU_brst,batchst.avg_CPU_brst,batchst.max_CPU_brst,batchst.min_CPU_brst);
+      printf("CPU burst estimates: count: %d, avg: %d, max: %d, min: %d\n",batchst.n_CPU_brst_est,batchst.avg_CPU_brst_est,batchst.max_CPU_brst_est,batchst.min_CPU_brst_est);
+      printf("CPU burst estimation error: count: %d, avg: %d\n",batchst.n_CPU_brst_err,batchst.avg_CPU_brst_err);
+   }
+  batchst.st_time=__INT32_MAX__;
+  batchst.end_time=0;
+  batchst.avg_wt=0;
+  batchst.avg_tr=0;
+  batchst.avg_comp=0;
+  batchst.min_comp=__INT32_MAX__;
+  batchst.max_comp=0;
+  batchst.n_CPU_brst=0;
+  batchst.avg_CPU_brst=0;
+  batchst.min_CPU_brst=__INT32_MAX__;
+  batchst.max_CPU_brst=0;
+  batchst.n_CPU_brst_est=0;
+  batchst.avg_CPU_brst_est=0;
+  batchst.min_CPU_brst_est=__INT32_MAX__;
+  batchst.max_CPU_brst_est=0;
+  batchst.n_CPU_brst_err=0;
+  batchst.avg_CPU_brst_err=0;
 }

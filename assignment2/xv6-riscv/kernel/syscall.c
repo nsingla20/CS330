@@ -115,6 +115,7 @@ extern uint64 sys_pinfo(void);
 
 extern uint64 sys_schedpolicy(void);
 extern uint64 sys_forkp(void);
+extern uint64 sys_print_batch(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -149,6 +150,7 @@ static uint64 (*syscalls[])(void) = {
 
 [SYS_schedpolicy] sys_schedpolicy,
 [SYS_forkp]       sys_forkp,
+[SYS_print_batch] sys_print_batch,
 };
 
 void

@@ -181,3 +181,8 @@ sys_pinfo(void)
   if ((x == 0) || (x < -1) || (p == 0)) return -1;
   return pinfo(x, p);
 }
+
+void
+sys_print_batch(void){
+  print_batch();
+}
