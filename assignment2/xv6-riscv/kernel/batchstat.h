@@ -1,5 +1,6 @@
 struct batchstat {
     int n;
+    int exit_n;
     int st_time;
     int end_time;
     int avg_wt;

@@ -48,12 +48,10 @@ proc_mapstacks(pagetable_t kpgtbl) {
   }
 }
 
-// initialize the proc table at boot time.
 void
-procinit(void)
-{
-  struct proc *p;
-  cur_sched_policy=SCHED_PREEMPT_RR;
+initbatch(){
+  batchst.n=0;
+  batchst.exit_n=0;
   batchst.st_time=__INT32_MAX__;
   batchst.end_time=0;
   batchst.avg_wt=0;
@@ -71,6 +69,14 @@ procinit(void)
   batchst.max_CPU_brst_est=0;
   batchst.n_CPU_brst_err=0;
   batchst.avg_CPU_brst_err=0;
+}
+
+// initialize the proc table at boot time.
+void
+procinit(void)
+{
+  struct proc *p;  
+  initbatch();
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
@@ -539,11 +545,15 @@ exit(int status)
   p->endtime = xticks;
 
   if(p->is_forkp){
+    batchst.exit_n++;
     batchst.end_time=max(batchst.end_time,xticks);
     batchst.avg_tr+=(p->endtime-p->ctime);
     batchst.avg_comp+=xticks;
     batchst.min_comp=min(batchst.min_comp,xticks);
     batchst.max_comp=max(batchst.max_comp,xticks);
+    if(batchst.exit_n==batchst.n){
+      print_batch();
+    }
   }
 
   // Jump into the scheduler, never to return.
@@ -656,9 +666,7 @@ void run_proc(struct proc *p,struct cpu *c){
   }
   else xticks = ticks;
 
-  if(p->is_forkp){
-    batchst.st_time=min(batchst.st_time,xticks);
-  }
+  
 
   // Switch to chosen process.  It is the process's job
   // to release its lock and then reacquire it
@@ -676,13 +684,6 @@ void run_proc(struct proc *p,struct cpu *c){
   if(!p->is_forkp){
     return;
   }
-
-  if (!holding(&tickslock)) {
-    acquire(&tickslock);
-    xticks = ticks;
-    release(&tickslock);
-  }
-  else xticks = ticks;
 
   uint end=p->t;
 
@@ -893,6 +894,10 @@ forkret(void)
   release(&tickslock);
 
   myproc()->stime = xticks;
+
+  if(myproc()->is_forkp){
+    batchst.st_time=min(batchst.st_time,xticks);
+  }
 
   if (first) {
     // File system initialization must be run in the context of a
@@ -1212,21 +1217,5 @@ void print_batch(){
       printf("CPU burst estimates: count: %d, avg: %d, max: %d, min: %d\n",batchst.n_CPU_brst_est,batchst.avg_CPU_brst_est,batchst.max_CPU_brst_est,batchst.min_CPU_brst_est);
       printf("CPU burst estimation error: count: %d, avg: %d\n",batchst.n_CPU_brst_err,batchst.avg_CPU_brst_err);
    }
-  batchst.st_time=__INT32_MAX__;
-  batchst.end_time=0;
-  batchst.avg_wt=0;
-  batchst.avg_tr=0;
-  batchst.avg_comp=0;
-  batchst.min_comp=__INT32_MAX__;
-  batchst.max_comp=0;
-  batchst.n_CPU_brst=0;
-  batchst.avg_CPU_brst=0;
-  batchst.min_CPU_brst=__INT32_MAX__;
-  batchst.max_CPU_brst=0;
-  batchst.n_CPU_brst_est=0;
-  batchst.avg_CPU_brst_est=0;
-  batchst.min_CPU_brst_est=__INT32_MAX__;
-  batchst.max_CPU_brst_est=0;
-  batchst.n_CPU_brst_err=0;
-  batchst.avg_CPU_brst_err=0;
+  initbatch();
 }
