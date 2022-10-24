@@ -710,17 +710,11 @@ void run_proc(struct proc *p,struct cpu *c){
 }
 
 void sched_UNIX(){
-  struct proc *p,*p_to_run;
+  struct proc *p,*minP=0;
   struct cpu *c = mycpu();
   c->proc=0;
   
   intr_on();
-  for(p=proc,p_to_run=proc;p<&proc[NPROC];p++){
-    if(p->state==RUNNABLE){
-      p_to_run=p;
-      break;
-    }
-  }
   for(p=proc;p<&proc[NPROC];p++){
     acquire(&p->lock);
     if(p->state==RUNNABLE){
@@ -732,77 +726,120 @@ void sched_UNIX(){
     acquire(&p->lock);
     if(p->state==RUNNABLE){
       if(!p->is_forkp){
-        run_proc(p,c);
+        minP=p;
         release(&p->lock);
-        return;
+        break;
       }
-      int x=p->bp+p->cpu_us/2;
-      int y=p_to_run->bp+p_to_run->cpu_us/2;
-      if(x<y){
-        p_to_run=p;
-      }
+      if(minP==0){
+        minP=p;
+      }else{
+        int x=p->bp+p->cpu_us/2;
+        int y=minP->bp+minP->cpu_us/2;
+        if(x<y){
+          minP=p;
+        }
+      } 
     }
     release(&p->lock);
   }
-  acquire(&p_to_run->lock);
-  run_proc(p_to_run,c);
-  release(&p_to_run->lock);
+  p=minP;
+  if(p!=0){
+    acquire(&p->lock);
+    run_proc(p,c);
+    release(&p->lock);
+  }
+  
 }
 
 void sched_SJF(){
-  struct proc *p,*p_to_run;
+  struct proc *p,*minP=0;
   struct cpu *c = mycpu();
   c->proc=0;
   
   intr_on();
-  for(p=proc,p_to_run=proc;p<&proc[NPROC];p++){
-    if(p->state==RUNNABLE){
-      p_to_run=p;
-      break;
-    }
-  }
   for(p=proc;p<&proc[NPROC];p++){
     acquire(&p->lock);
     if(p->state == RUNNABLE){
       if(!p->is_forkp){
-        run_proc(p,c);
+        minP=p;
         release(&p->lock);
-        return;
+        break;
       }
-      if(p->s<p_to_run->s){
-        p_to_run=p;
+      if(minP==0){
+        minP=p;
+      }else{
+        if(p->s<minP->s){
+          minP=p;
+        }
       }
     }
     release(&p->lock);
   }
-  acquire(&p_to_run->lock);
-  run_proc(p_to_run,c);
-  release(&p_to_run->lock);
+  p=minP;
+  if(p!=0){
+    acquire(&p->lock);
+    run_proc(p,c);
+    release(&p->lock);
+  }
+  
+}
+void
+sched_FCFS(){
+  struct proc *p,*minP=0;
+  struct cpu *c = mycpu();
+  
+  c->proc = 0;
+  
+  // Avoid deadlock by ensuring that devices can interrupt.
+  intr_on();
+
+  // Loop over process table looking for process to run.
+  for(p = proc; p < &proc[NPROC]; p++)
+  {
+    acquire(&p->lock); 
+    if(p->state==RUNNABLE)  {
+      if(p->pid > 1)
+      {
+        if (minP != 0) {
+          if(p->ctime < minP->ctime)
+              minP = p;
+        }
+        else
+          minP = p;
+      }
+    }
+    release(&p->lock);
+
+  }
+  p = minP;
+
+  if(p != 0){
+    acquire(&p->lock);
+    run_proc(p,c);
+    release(&p->lock);
+  }
 }
 
-void sched_FCFS_RR(){
+void sched_RR(){
   struct proc *p;
   struct cpu *c = mycpu();
   
   c->proc = 0;
-  for(;;){
-    // Avoid deadlock by ensuring that devices can interrupt.
-    intr_on();
+  
+  // Avoid deadlock by ensuring that devices can interrupt.
+  intr_on();
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        
-        run_proc(p,c);
-
-        if(cur_sched_policy!=SCHED_PREEMPT_RR&&cur_sched_policy!=SCHED_NPREEMPT_FCFS){
-          release(&p->lock);
-          return;
-        }
-      }
-      release(&p->lock);
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == RUNNABLE) {
+      run_proc(p,c);
+    }
+    release(&p->lock);
+    if(cur_sched_policy!=SCHED_PREEMPT_RR){
+      return;
     }
   }
+  
 }
 
 // Per-CPU process scheduler.
@@ -817,11 +854,11 @@ scheduler(void)
 {
   for(;;){
     if(cur_sched_policy==SCHED_NPREEMPT_FCFS){
-      sched_FCFS_RR();
+      sched_FCFS();
     }else if(cur_sched_policy==SCHED_NPREEMPT_SJF){
       sched_SJF();
     }else if(cur_sched_policy==SCHED_PREEMPT_RR){
-      sched_FCFS_RR();
+      sched_RR();
     }else if(cur_sched_policy==SCHED_PREEMPT_UNIX){
       sched_UNIX();
     }else{
