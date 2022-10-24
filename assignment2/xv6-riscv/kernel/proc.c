@@ -672,7 +672,7 @@ void run_proc(struct proc *p,struct cpu *c){
   // to release its lock and then reacquire it
   // before jumping back to us.
   p->state = RUNNING;
-  batchst.avg_wt+=(xticks-p->en_runab);
+  if(p->is_forkp)batchst.avg_wt+=(xticks-p->en_runab);
   uint st=xticks;
   c->proc = p;
   swtch(&c->context, &p->context);
@@ -688,12 +688,6 @@ void run_proc(struct proc *p,struct cpu *c){
   uint end=p->t;
 
   uint brust=end-st;
-  if(p->s>0){
-    batchst.n_CPU_brst_est++;
-    batchst.avg_CPU_brst_est+=p->s;
-    batchst.max_CPU_brst_est=max(batchst.max_CPU_brst_est,p->s);
-    batchst.min_CPU_brst_est=min(batchst.min_CPU_brst_est,p->s);
-  }
   if(brust>0){
     batchst.n_CPU_brst++;
     batchst.avg_CPU_brst+=brust;
@@ -707,6 +701,12 @@ void run_proc(struct proc *p,struct cpu *c){
 
   p->s=brust-(SCHED_PARAM_SJF_A_NUMER*brust)/SCHED_PARAM_SJF_A_DENOM+(SCHED_PARAM_SJF_A_NUMER*(p->s))/SCHED_PARAM_SJF_A_DENOM;
   
+  if(p->s>0){
+    batchst.n_CPU_brst_est++;
+    batchst.avg_CPU_brst_est+=p->s;
+    batchst.max_CPU_brst_est=max(batchst.max_CPU_brst_est,p->s);
+    batchst.min_CPU_brst_est=min(batchst.min_CPU_brst_est,p->s);
+  }
 }
 
 void sched_UNIX(){
