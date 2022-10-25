@@ -476,7 +476,7 @@ forkp(int bp)
     release(&tickslock);
   }
   else xticks = ticks;
-  p->en_runab=xticks;
+  np->en_runab=xticks;
   release(&np->lock);
 
   return pid;
