@@ -709,12 +709,8 @@ void run_proc(struct proc *p,struct cpu *c){
   }
 }
 
-void sched_UNIX(){
+void sched_UNIX(struct cpu *c){
   struct proc *p,*minP=0;
-  struct cpu *c = mycpu();
-  c->proc=0;
-  
-  intr_on();
   for(p=proc;p<&proc[NPROC];p++){
     acquire(&p->lock);
     if(p->state==RUNNABLE){
@@ -751,12 +747,8 @@ void sched_UNIX(){
   
 }
 
-void sched_SJF(){
+void sched_SJF(struct cpu *c){
   struct proc *p,*minP=0;
-  struct cpu *c = mycpu();
-  c->proc=0;
-  
-  intr_on();
   for(p=proc;p<&proc[NPROC];p++){
     acquire(&p->lock);
     if(p->state == RUNNABLE){
@@ -784,51 +776,22 @@ void sched_SJF(){
   
 }
 void
-sched_FCFS(){
-  struct proc *p,*minP=0;
-  struct cpu *c = mycpu();
-  
-  c->proc = 0;
-  
-  // Avoid deadlock by ensuring that devices can interrupt.
-  intr_on();
-
-  // Loop over process table looking for process to run.
-  for(p = proc; p < &proc[NPROC]; p++)
-  {
-    acquire(&p->lock); 
-    if(p->state==RUNNABLE)  {
-      if(p->pid > 1)
-      {
-        if (minP != 0) {
-          if(p->ctime < minP->ctime)
-              minP = p;
-        }
-        else
-          minP = p;
-      }
+sched_FCFS(struct cpu *c){
+  struct proc *p;
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == RUNNABLE) {
+      run_proc(p,c);
     }
     release(&p->lock);
-
-  }
-  p = minP;
-
-  if(p != 0){
-    acquire(&p->lock);
-    run_proc(p,c);
-    release(&p->lock);
+    if(cur_sched_policy!=SCHED_NPREEMPT_FCFS){
+      return;
+    }
   }
 }
 
-void sched_RR(){
+void sched_RR(struct cpu *c){
   struct proc *p;
-  struct cpu *c = mycpu();
-  
-  c->proc = 0;
-  
-  // Avoid deadlock by ensuring that devices can interrupt.
-  intr_on();
-
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == RUNNABLE) {
@@ -853,14 +816,17 @@ void
 scheduler(void)
 {
   for(;;){
+    struct cpu *c = mycpu();
+    c->proc=0;
+    intr_on();
     if(cur_sched_policy==SCHED_NPREEMPT_FCFS){
-      sched_FCFS();
+      sched_FCFS(c);
     }else if(cur_sched_policy==SCHED_NPREEMPT_SJF){
-      sched_SJF();
+      sched_SJF(c);
     }else if(cur_sched_policy==SCHED_PREEMPT_RR){
-      sched_RR();
+      sched_RR(c);
     }else if(cur_sched_policy==SCHED_PREEMPT_UNIX){
-      sched_UNIX();
+      sched_UNIX(c);
     }else{
       panic("No such sched policy");
     }
