@@ -15,15 +15,15 @@ void sem_init(struct sem_t* s,int v){
 }
 void sem_wait(struct sem_t* s){
     acquiresleep(&s->lock);
-    while(s->val == 0){
-        cond_wait(&s->cv, &s->lock);
-    }
     s->val--;
+
+    if(s->val<0)cond_wait(&s->cv, &s->lock);
+
     releasesleep(&s->lock);
 }
 void sem_post(struct sem_t* s){
     acquiresleep(&s->lock);
     s->val++;
-    cond_signal(&s->cv);
+    if(s->val<=0)cond_signal(&s->cv);
     releasesleep(&s->lock);
 }
