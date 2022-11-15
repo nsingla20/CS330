@@ -27,6 +27,9 @@ int uptime(void);
 int barrier_alloc(void);
 int barrier(int,int,int);
 int barrier_free(int);
+int buffer_cond_init(void);
+int cond_produce(int);
+int cond_consume(void);
 
 int getppid(void);
 int yield(void);

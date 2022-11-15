@@ -13,8 +13,77 @@ static int barri[]={-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
 static struct cond_t cv_br;
 static struct sleeplock lk_br;
 
+#define SIZE 20
+
+typedef struct {
+   int x;
+   int full;
+   struct sleeplock lock;
+   struct cond_t inserted;
+   struct cond_t deleted;
+} buffer_elem;
+
+static buffer_elem buffer[SIZE];
+static int tail = 0, head = 0;
+static struct sleeplock lock_delete;
+static struct sleeplock lock_insert;
+static struct sleeplock lock_print;
+
+uint64
+sys_buffer_cond_init(void){
+  initsleeplock(&lock_delete,"delete");
+  initsleeplock(&lock_insert,"insert");
+  initsleeplock(&lock_print,"print");
+  tail=0;
+  head=0;
+  for(int i=0;i<SIZE;i++){
+    initsleeplock(&buffer[i].lock,"buffer");
+    buffer[i].x = -1;
+		buffer[i].full = 0;
+  }
+  return 0;
+}
+
+uint64
+sys_cond_produce(void){
+  int v;
+  if(argint(0, &v) < 0)
+    return -1;
+  acquiresleep(&lock_insert);
+  int index = tail;
+  tail = (tail + 1) % SIZE;
+  releasesleep(&lock_insert);
+  acquiresleep(&buffer[index].lock);
+  while (buffer[index].full) cond_wait(&buffer[index].deleted, &buffer[index].lock);
+  buffer[index].x = v;
+  buffer[index].full = 1;
+  cond_signal(&buffer[index].inserted);
+  releasesleep(&buffer[index].lock);
+  return 0;
+}
+
+uint64
+sys_cond_consume(void){
+  int v;
+  acquiresleep(&lock_delete);
+  int index = head;
+  head = (head + 1) % SIZE;
+  releasesleep(&lock_delete);
+  acquiresleep(&buffer[index].lock);
+  while (!buffer[index].full) cond_wait(&buffer[index].inserted, &buffer[index].lock);
+  v = buffer[index].x;
+  buffer[index].full = 0;
+  cond_signal(&buffer[index].deleted);
+  releasesleep(&buffer[index].lock);
+  acquiresleep(&lock_print);
+  printf("%d ", v);
+  releasesleep(&lock_print);
+  return v;
+}
+
 uint64
 sys_barrier_alloc(void){
+  initsleeplock(&lock_print,"print");
   for(int i=0;i<10;i++){
     if(barri[i]==-1){
       barri[i]=0;
@@ -39,7 +108,9 @@ sys_barrier(void){
 
 
   acquiresleep(&lk_br);
+  acquiresleep(&lock_print);
   printf("%d: Entered barrier#%d for barrier array id %d\n",pid,k,i);
+  releasesleep(&lock_print);
   barri[i]++;
   if(barri[i]==n){
     cond_broadcast(&cv_br);
@@ -47,7 +118,9 @@ sys_barrier(void){
   }else{
     cond_wait(&cv_br,&lk_br);
   }
+  acquiresleep(&lock_print);
   printf("%d: Finished barrier#%d for barrier array id %d\n",pid,k,i);
+  releasesleep(&lock_print);
   releasesleep(&lk_br);
 
   return 0;
@@ -61,6 +134,8 @@ sys_barrier_free(void){
   barri[n]=0;
   return 0;
 }
+
+
 
 uint64
 sys_exit(void)

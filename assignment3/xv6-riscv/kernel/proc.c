@@ -1065,9 +1065,11 @@ wakeupone(void *chan)
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
 	p->waitstart = xticks;
+  release(&p->lock);
+  return;
       }
       release(&p->lock);
-      return;
+
     }
   }
 }

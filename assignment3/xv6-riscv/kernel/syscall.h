@@ -34,3 +34,6 @@
 #define SYS_barrier_alloc 31
 #define SYS_barrier 32
 #define SYS_barrier_free 33
+#define SYS_buffer_cond_init 34
+#define SYS_cond_produce 35
+#define SYS_cond_consume 36
