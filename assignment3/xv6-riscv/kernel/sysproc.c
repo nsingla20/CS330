@@ -38,6 +38,11 @@ uint64
 sys_buffer_sem_init(void){
   nextp=0;
   nextc=0;
+
+  for(int i=0;i<SIZE;i++){
+    buffer_sem[i]=-1;
+  }
+
   sem_init(&pro,1);
   sem_init(&con,1);
   sem_init(&empty,SIZE);
