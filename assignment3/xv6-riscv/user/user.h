@@ -30,6 +30,9 @@ int barrier_free(int);
 int buffer_cond_init(void);
 int cond_produce(int);
 int cond_consume(void);
+int buffer_sem_init(void);
+int sem_produce(int);
+int sem_consume(void);
 
 int getppid(void);
 int yield(void);

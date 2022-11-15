@@ -9,6 +9,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 struct cond_t;
+struct sem_t;
 
 // bio.c
 void            binit(void);
@@ -135,6 +136,12 @@ void            initsleeplock(struct sleeplock*, char*);
 void            cond_wait (struct cond_t*, struct sleeplock*);
 void            cond_signal (struct cond_t*);
 void            cond_broadcast (struct cond_t*);
+
+// semaphore.c
+void            sem_init(struct sem_t*,int);
+void            sem_wait(struct sem_t*);
+void            sem_post(struct sem_t*);
+
 
 // string.c
 int             memcmp(const void*, const void*, uint);

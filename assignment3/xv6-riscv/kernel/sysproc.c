@@ -8,6 +8,7 @@
 #include "sleeplock.h"
 #include "proc.h"
 #include "condvar.h"
+#include "semaphore.h"
 
 static int barri[]={-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
 static struct cond_t cv_br;
@@ -28,6 +29,50 @@ static int tail = 0, head = 0;
 static struct sleeplock lock_delete;
 static struct sleeplock lock_insert;
 static struct sleeplock lock_print;
+
+static int buffer_sem[SIZE],nextp,nextc;
+static struct sem_t pro,con,empty,full;
+
+
+uint64
+sys_buffer_sem_init(void){
+  nextp=0;
+  nextc=0;
+  sem_init(&pro,1);
+  sem_init(&con,1);
+  sem_init(&empty,SIZE);
+  sem_init(&full,0);
+  return 0;
+}
+
+uint64
+sys_sem_produce(void){
+  int v;
+  if(argint(0, &v) < 0)
+    return -1;
+  sem_wait(&empty);
+  sem_wait (&pro);
+  buffer_sem[nextp] = v;
+  nextp = (nextp+1)%SIZE;
+  sem_post (&pro);
+  sem_post (&full);
+  return 0;
+}
+
+uint64
+sys_sem_consume(void){
+  int v;
+  sem_wait (&full);
+  sem_wait (&con);
+  v = buffer_sem[nextc];
+  nextc = (nextc+1)%SIZE;
+  sem_post (&con);
+  sem_post (&empty);
+  acquiresleep(&lock_print);
+  printf("%d ",v);
+  releasesleep(&lock_print);
+  return 0;
+}
 
 uint64
 sys_buffer_cond_init(void){
