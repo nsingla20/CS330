@@ -30,3 +30,7 @@
 #define SYS_pinfo   28
 #define SYS_forkp   29
 #define SYS_schedpolicy 30
+
+#define SYS_barrier_alloc 31
+#define SYS_barrier 32
+#define SYS_barrier_free 33

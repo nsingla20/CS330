@@ -14,7 +14,7 @@ sub entry {
     print " ecall\n";
     print " ret\n";
 }
-	
+
 entry("fork");
 entry("exit");
 entry("wait");
@@ -46,3 +46,8 @@ entry("ps");
 entry("pinfo");
 entry("forkp");
 entry("schedpolicy");
+
+entry("barrier_alloc");
+entry("barrier");
+entry("barrier_free");
+

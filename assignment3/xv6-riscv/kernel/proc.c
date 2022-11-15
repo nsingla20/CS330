@@ -3,6 +3,8 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
+#include "condvar.h"
+#include "sleeplock.h"
 #include "proc.h"
 #include "defs.h"
 #include "procstat.h"
@@ -55,7 +57,7 @@ struct spinlock wait_lock;
 void
 proc_mapstacks(pagetable_t kpgtbl) {
   struct proc *p;
-  
+
   for(p = proc; p < &proc[NPROC]; p++) {
     char *pa = kalloc();
     if(pa == 0)
@@ -70,7 +72,7 @@ void
 procinit(void)
 {
   struct proc *p;
-  
+
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
@@ -111,7 +113,7 @@ myproc(void) {
 int
 allocpid() {
   int pid;
-  
+
   acquire(&pid_lock);
   pid = nextpid;
   nextpid = nextpid + 1;
@@ -264,7 +266,7 @@ userinit(void)
 
   p = allocproc();
   initproc = p;
-  
+
   // allocate one user page and copy init's instructions
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
@@ -513,7 +515,7 @@ exit(int status)
 
   // Parent might be sleeping in wait().
   wakeup(p->parent);
-  
+
   acquire(&p->lock);
 
   p->xstate = status;
@@ -632,7 +634,7 @@ wait(uint64 addr)
       release(&wait_lock);
       return -1;
     }
-    
+
     // Wait for a child to exit.
     sleep(p, &wait_lock);  //DOC: wait-sleep
   }
@@ -698,7 +700,7 @@ scheduler(void)
   struct cpu *c = mycpu();
   uint xticks;
   int min_burst, min_prio;
-  
+
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
@@ -916,7 +918,7 @@ sleep(void *chan, struct spinlock *lk)
      release(&tickslock);
   }
   else xticks = ticks;
-  
+
   // Must acquire p->lock in order to
   // change p->state and then call sched.
   // Once we hold p->lock, we can be
@@ -961,6 +963,62 @@ sleep(void *chan, struct spinlock *lk)
   acquire(lk);
 }
 
+void
+condsleep(struct cond_t* cv,struct sleeplock* lk){
+  struct proc *p = myproc();
+  uint xticks;
+
+  if (!holding(&tickslock)) {
+     acquire(&tickslock);
+     xticks = ticks;
+     release(&tickslock);
+  }
+  else xticks = ticks;
+
+  // Must acquire p->lock in order to
+  // change p->state and then call sched.
+  // Once we hold p->lock, we can be
+  // guaranteed that we won't miss any wakeup
+  // (wakeup locks p->lock),
+  // so it's okay to release lk.
+
+  acquire(&p->lock);  //DOC: sleeplock1
+  releasesleep(lk);
+
+  // Go to sleep.
+  p->chan = cv;
+  p->state = SLEEPING;
+
+  p->cpu_usage += (SCHED_PARAM_CPU_USAGE/2);
+
+  if ((p->is_batchproc) && ((xticks - p->burst_start) > 0)) {
+     num_cpubursts++;
+     cpubursts_tot += (xticks - p->burst_start);
+     if (cpubursts_max < (xticks - p->burst_start)) cpubursts_max = xticks - p->burst_start;
+     if (cpubursts_min > (xticks - p->burst_start)) cpubursts_min = xticks - p->burst_start;
+     if (p->nextburst_estimate > 0) {
+	estimation_error += ((p->nextburst_estimate >= (xticks - p->burst_start)) ? (p->nextburst_estimate - (xticks - p->burst_start)) : ((xticks - p->burst_start) - p->nextburst_estimate));
+        estimation_error_instance++;
+     }
+     p->nextburst_estimate = (xticks - p->burst_start) - ((xticks - p->burst_start)*SCHED_PARAM_SJF_A_NUMER)/SCHED_PARAM_SJF_A_DENOM + (p->nextburst_estimate*SCHED_PARAM_SJF_A_NUMER)/SCHED_PARAM_SJF_A_DENOM;
+     if (p->nextburst_estimate > 0) {
+        num_cpubursts_est++;
+        cpubursts_est_tot += p->nextburst_estimate;
+        if (cpubursts_est_max < p->nextburst_estimate) cpubursts_est_max = p->nextburst_estimate;
+        if (cpubursts_est_min > p->nextburst_estimate) cpubursts_est_min = p->nextburst_estimate;
+     }
+  }
+
+  sched();
+
+  // Tidy up.
+  p->chan = 0;
+
+  // Reacquire original lock.
+  release(&p->lock);
+  acquiresleep(lk);
+}
+
 // Wake up all processes sleeping on chan.
 // Must be called without any p->lock.
 void
@@ -984,6 +1042,32 @@ wakeup(void *chan)
 	p->waitstart = xticks;
       }
       release(&p->lock);
+    }
+  }
+}
+
+void
+wakeupone(void *chan)
+{
+  struct proc *p;
+  uint xticks;
+
+  if (!holding(&tickslock)) {
+     acquire(&tickslock);
+     xticks = ticks;
+     release(&tickslock);
+  }
+  else xticks = ticks;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    if(p != myproc()){
+      acquire(&p->lock);
+      if(p->state == SLEEPING && p->chan == chan) {
+        p->state = RUNNABLE;
+	p->waitstart = xticks;
+      }
+      release(&p->lock);
+      return;
     }
   }
 }

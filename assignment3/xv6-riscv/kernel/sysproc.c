@@ -5,7 +5,62 @@
 #include "param.h"
 #include "memlayout.h"
 #include "spinlock.h"
+#include "sleeplock.h"
 #include "proc.h"
+#include "condvar.h"
+
+static int barri[]={-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+static struct cond_t cv_br;
+static struct sleeplock lk_br;
+
+uint64
+sys_barrier_alloc(void){
+  for(int i=0;i<10;i++){
+    if(barri[i]==-1){
+      barri[i]=0;
+      return i;
+    }
+  }
+  return -1;
+}
+
+uint64
+sys_barrier(void){
+  int pid,k,n,i;
+  pid=myproc()->pid;
+  if(argint(0, &k) < 0)
+    return -1;
+  if(argint(1, &i) < 0)
+    return -1;
+  if(argint(2, &n) < 0)
+    return -1;
+  if(barri[i]==-1)
+    return -1;
+
+
+  acquiresleep(&lk_br);
+  printf("%d: Entered barrier#%d for barrier array id %d\n",pid,k,i);
+  barri[i]++;
+  if(barri[i]==n){
+    cond_broadcast(&cv_br);
+    barri[i]=0;
+  }else{
+    cond_wait(&cv_br,&lk_br);
+  }
+  printf("%d: Finished barrier#%d for barrier array id %d\n",pid,k,i);
+  releasesleep(&lk_br);
+
+  return 0;
+}
+
+uint64
+sys_barrier_free(void){
+  int n;
+  if(argint(0, &n) < 0)
+    return -1;
+  barri[n]=0;
+  return 0;
+}
 
 uint64
 sys_exit(void)

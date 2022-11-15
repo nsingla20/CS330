@@ -24,6 +24,9 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int barrier_alloc(void);
+int barrier(int,int,int);
+int barrier_free(int);
 
 int getppid(void);
 int yield(void);
