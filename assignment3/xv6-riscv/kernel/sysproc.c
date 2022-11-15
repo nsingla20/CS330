@@ -176,7 +176,7 @@ sys_barrier_free(void){
   int n;
   if(argint(0, &n) < 0)
     return -1;
-  barri[n]=0;
+  barri[n]=-1;
   return 0;
 }
 
